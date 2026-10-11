@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam</title>
+<style>
+  body { margin: 0; }
+  iframe { width: 100vw; height: 100vh; border: 0; }
+
+  #warn { display: none; position: fixed; inset: 0; z-index: 9;
+          background: rgba(15, 18, 25, .72);
+          -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+          align-items: center; justify-content: center; padding: 20px;
+          font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+          animation: fadeIn .25s ease; }
+  #warn .card { background: #fff; color: #1d2330; width: 100%; max-width: 420px;
+                border-radius: 18px; padding: 32px 28px 26px; text-align: center;
+                box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+                animation: pop .3s cubic-bezier(.2, .9, .3, 1.2); }
+  #warn .icon { width: 56px; height: 56px; margin: 0 auto 18px; border-radius: 50%;
+                background: #fdeceb; color: #d83a3a;
+                display: flex; align-items: center; justify-content: center; }
+  #warn .icon svg { width: 28px; height: 28px; }
+  #warn h2 { margin: 0 0 8px; font-size: 1.3rem; font-weight: 650; }
+  #warn p { margin: 0 0 18px; color: #5b6475; font-size: .95rem; line-height: 1.5; }
+  #warn .badge { display: inline-block; margin-bottom: 22px; padding: 4px 12px;
+                 border-radius: 99px; background: #f1f3f7; color: #5b6475;
+                 font-size: .78rem; font-weight: 600; letter-spacing: .02em; }
+  #warn button { width: 100%; padding: 12px; border: 0; border-radius: 10px;
+                 background: #1d2330; color: #fff; font-size: .95rem; font-weight: 600;
+                 cursor: pointer; transition: background .15s, transform .1s; }
+  #warn button:hover { background: #2f3748; }
+  #warn button:active { transform: scale(.98); }
+
+  @media (prefers-color-scheme: dark) {
+    #warn .card { background: #1d222b; color: #e8ebf1; }
+    #warn .icon { background: rgba(216, 58, 58, .18); color: #ff6b6b; }
+    #warn p { color: #9aa3b5; }
+    #warn .badge { background: #2a303b; color: #9aa3b5; }
+    #warn button { background: #e8ebf1; color: #14171d; }
+    #warn button:hover { background: #fff; }
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.96); }
+                   to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="warn">
+  <div class="card">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <h2>You left the exam window</h2>
+    <p>This activity was recorded and your teacher has been notified. Please stay on this page until you finish.</p>
+    <span class="badge" id="warnCount">Warning 1</span>
+    <button onclick="warn.style.display='none'">Return to exam</button>
+  </div>
+</div>
+<iframe id="exam"></iframe>
+
+<script>
+// Messages go through ntfy.sh, a free public message service (no account needed).
+// To use your own ntfy server, change this one line (and the same line in dashboard.html).
+const NTFY = "https://ntfy.sh";
+
+// Form and topic come from the link made by setup.html
+const params = new URLSearchParams(location.search);
+const FORM = params.get("form"), TOPIC = params.get("t");
+function okHost(u, host) { try { return new URL(u).hostname === host; } catch (e) { return false; } }
+if (!okHost(FORM, "docs.google.com") || !/^em-[a-f0-9]{24}$/.test(TOPIC || "")) {
+  document.body.innerHTML = '<p style="font-family:system-ui;padding:40px;text-align:center">' +
+    'This exam link is not set up correctly. Ask your teacher for the link made by setup.html.</p>';
+  throw new Error("Missing or invalid form/topic");
+}
+document.getElementById("exam").src = FORM;
+const student = (prompt("Enter your full name:") || "").trim() || "Unknown student";
+let count = 0, away = false;
+
+// send an event to the teacher; retry a few times if the network hiccups
+async function send(event, tries = 0) {
+  try {
+    const r = await fetch(NTFY + "/" + TOPIC, { method: "POST", body: JSON.stringify({ s: student, e: event }) });
+    if (!r.ok) throw new Error("status " + r.status);
+  } catch (err) {
+    if (tries < 6) setTimeout(() => send(event, tries + 1), 1000 * Math.pow(2, tries));
+  }
+}
+
+// tell the dashboard the student joined
+send("joined");
+
+function log(event) {
+  count++;
+  document.getElementById("warnCount").textContent = "Warning " + count;
+  document.getElementById("warn").style.display = "flex";
+  send(event);
+}
+
+// One shared flag, so one trip away = one violation
+function leave(reason) {
+  if (away) return;
+  away = true;
+  log(reason);
+}
+function back() {
+  if (!document.hidden && document.hasFocus()) away = false;
+}
+
+// switched tab
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) leave("switched tab");
+  else back();
+});
+
+// opened another app/window or clicked the other monitor
+setInterval(() => {
+  if (!document.hasFocus()) leave("left window");
+  else back();
+}, 500);
+
+// block right click and copy/paste
+["contextmenu", "copy", "paste", "cut"].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault()));
+</script>
+</body>
+</html>

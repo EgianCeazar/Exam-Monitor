@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam Monitor</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec;
+          --ok:#1a9d57; --warn:#e08a00; --bad:#d83a3a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171d; --card:#1d222b; --text:#e8ebf1; --muted:#8c94a6; --line:#2c3340; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); padding:20px; }
+  h1 { margin:0 0 4px; font-size:1.4rem; }
+  .sub { color:var(--muted); font-size:.9rem; margin-bottom:16px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .stat b { display:block; font-size:1.8rem; }
+  .stat span { color:var(--muted); font-size:.8rem; }
+  .grid { display:grid; grid-template-columns:2fr 1fr; gap:16px; }
+  @media (max-width:800px){ .grid { grid-template-columns:1fr; } }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .box h2 { margin:0; padding:12px 14px; font-size:1rem; border-bottom:1px solid var(--line); }
+  .scroll { overflow-x:auto; max-height:70vh; overflow-y:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:.75rem; text-transform:uppercase; }
+  .pill { padding:2px 10px; border-radius:99px; font-size:.75rem; font-weight:600; color:#fff; }
+  .ok { background:var(--ok); } .warn { background:var(--warn); } .bad { background:var(--bad); }
+  tr.flash { animation: flash 2s; }
+  @keyframes flash { from { background:rgba(216,58,58,.35); } to { background:transparent; } }
+  .feed { list-style:none; margin:0; padding:0; }
+  .feed li { padding:9px 14px; border-bottom:1px solid var(--line); font-size:.85rem; }
+  .feed small { color:var(--muted); display:block; }
+  .setup { max-width:420px; margin:10vh auto; background:var(--card); border:1px solid var(--line);
+           padding:20px; border-radius:12px; }
+  .setup input { width:100%; padding:10px; margin:6px 0 12px; border:1px solid var(--line);
+                 border-radius:8px; background:var(--bg); color:var(--text); }
+  button { padding:9px 16px; border:0; border-radius:8px; background:#2f6bff; color:#fff; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  .top { display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap; }
+  #err { color:var(--bad); font-size:.85rem; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warn); margin-right:6px; }
+  .dot.live { background:var(--ok); }
+  .empty { max-width:420px; margin:10vh auto; background:var(--card); border:1px solid var(--line); padding:22px; border-radius:12px; text-align:center; }
+  .empty a { color:#2f6bff; font-weight:600; }
+  label { font-size:.85rem; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="empty" class="empty" style="display:none">
+  <h1>Exam Monitor</h1>
+  <p class="sub">No exam is set up in this browser yet.</p>
+  <a href="setup.html">Go to setup</a>
+</div>
+
+<div id="app" style="display:none">
+  <div class="top">
+    <div>
+      <h1>Exam Monitor</h1>
+      <div class="sub"><span class="dot" id="dot"></span><span id="status">Connecting...</span></div>
+    </div>
+    <div>
+      <button class="ghost" onclick="enableAlerts()">Enable alerts</button>
+      <button class="ghost" onclick="exportCsv()">Download CSV</button>
+      <button class="ghost" onclick="location.href='setup.html'">New exam</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="sStudents">0</b><span>Students</span></div>
+    <div class="stat"><b id="sViol">0</b><span>Total violations</span></div>
+    <div class="stat"><b id="sFlag" style="color:var(--bad)">0</b><span>Flagged (3+)</span></div>
+    <div class="stat"><b id="sClean" style="color:var(--ok)">0</b><span>Clean</span></div>
+  </div>
+
+  <div class="grid">
+    <div class="box">
+      <h2>Students</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Name</th><th>Status</th><th>Violations</th><th>Last event</th><th>Last seen</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="box">
+      <h2>Live feed</h2>
+      <ul class="feed scroll" id="feed"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// Same server as in exam.html. Change both if you self-host ntfy.
+const NTFY = "https://ntfy.sh";
+const FLAG_AT = 3;
+
+// Teacher link from setup.html carries the session id in the # part
+let topic = localStorage.getItem("em_topic");
+if (location.hash.length > 1) {
+  const t = new URLSearchParams(location.hash.slice(1)).get("t");
+  if (/^em-[a-f0-9]{24}$/.test(t || "")) { topic = t; localStorage.setItem("em_topic", t); }
+  history.replaceState(null, "", location.pathname);
+}
+
+const events = [];            // {id, time, student, event}
+const seenIds = new Set();
+let flashNames = new Set(), audioCtx, liveAlerts = false, renderTimer = null;
+
+function enableAlerts() {
+  if ("Notification" in window) Notification.requestPermission();
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+}
+function beep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 880; g.gain.value = 0.15;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {}
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function ago(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  return new Date(t).toLocaleTimeString();
+}
+
+function onMessage(raw) {
+  let m, p;
+  try { m = JSON.parse(raw); } catch (e) { return; }
+  if (m.event !== "message" || seenIds.has(m.id)) return;
+  try { p = JSON.parse(m.message); } catch (e) { return; }
+  if (!p || !p.s || !p.e) return;
+  seenIds.add(m.id);
+  const ev = { id: m.id, time: m.time * 1000, student: String(p.s).slice(0, 80), event: String(p.e).slice(0, 40) };
+  events.push(ev);
+
+  if (liveAlerts && ev.event !== "joined") {
+    flashNames.add(ev.student);
+    beep();
+    if ("Notification" in window && Notification.permission === "granted")
+      new Notification("Exam violation", { body: ev.student + ": " + ev.event });
+  }
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 150);   // batch bursts of messages
+}
+
+function connect() {
+  const es = new EventSource(NTFY + "/" + topic + "/sse?since=all");
+  es.onopen = () => {
+    setStatus(true);
+    liveAlerts = false;                      // old messages arrive first, so stay quiet
+    setTimeout(() => { liveAlerts = true; }, 2500);
+  };
+  es.onmessage = e => onMessage(e.data);
+  es.onerror = () => setStatus(false);       // the browser reconnects by itself
+}
+function setStatus(ok) {
+  document.getElementById("dot").className = "dot" + (ok ? " live" : "");
+  document.getElementById("status").textContent = ok ? "Live" : "Reconnecting...";
+}
+
+function render() {
+  events.sort((a, b) => a.time - b.time);
+  const students = {};
+  events.forEach(r => {
+    const s = students[r.student] || (students[r.student] = { name: r.student, count: 0, last: r.time, event: r.event });
+    if (r.event !== "joined") s.count++;
+    if (r.time >= s.last) { s.last = r.time; s.event = r.event; }
+  });
+  const list = Object.values(students).sort((a, b) => b.count - a.count || b.last - a.last);
+  const violations = events.filter(r => r.event !== "joined");
+
+  document.getElementById("sStudents").textContent = list.length;
+  document.getElementById("sViol").textContent = violations.length;
+  document.getElementById("sFlag").textContent = list.filter(s => s.count >= FLAG_AT).length;
+  document.getElementById("sClean").textContent = list.filter(s => s.count === 0).length;
+
+  document.getElementById("rows").innerHTML = list.map(s => {
+    const cls = s.count >= FLAG_AT ? "bad" : s.count > 0 ? "warn" : "ok";
+    const label = s.count >= FLAG_AT ? "Flagged" : s.count > 0 ? "Warning" : "Clean";
+    return `<tr class="${flashNames.has(s.name) ? "flash" : ""}">
+      <td><b>${esc(s.name)}</b></td>
+      <td><span class="pill ${cls}">${label}</span></td>
+      <td>${s.count}</td><td>${esc(s.event)}</td><td>${ago(s.last)}</td></tr>`;
+  }).join("") || `<tr><td colspan="5">No students yet.</td></tr>`;
+  flashNames.clear();
+
+  document.getElementById("feed").innerHTML = events.slice(-30).reverse().map(r =>
+    `<li><b>${esc(r.student)}</b> ${r.event === "joined" ? "joined the exam" : esc(r.event)}
+     <small>${new Date(r.time).toLocaleTimeString()}</small></li>`).join("");
+}
+
+function exportCsv() {
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const rows = [["Time", "Student", "Event"]].concat(
+    events.map(r => [new Date(r.time).toLocaleString(), r.student, r.event]));
+  const blob = new Blob([rows.map(r => r.map(q).join(",")).join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "exam-log.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+if (topic) {
+  document.getElementById("app").style.display = "block";
+  render();
+  connect();
+  setInterval(render, 15000);   // keeps the "x ago" times fresh
+} else {
+  document.getElementById("empty").style.display = "block";
+}
+</script>
+</body>
+</html>

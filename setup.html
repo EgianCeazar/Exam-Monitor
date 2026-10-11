@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam Monitor Setup</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec; --ok:#1a9d57; --bad:#d83a3a; --accent:#2f6bff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171d; --card:#1d222b; --text:#e8ebf1; --muted:#8c94a6; --line:#2c3340; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); padding:24px 16px; }
+  .wrap { max-width:640px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:1.5rem; }
+  .sub { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+  h2 { margin:0 0 12px; font-size:1rem; }
+  label { display:block; font-size:.85rem; font-weight:600; margin:0 0 4px; }
+  small { display:block; color:var(--muted); font-size:.8rem; margin-top:4px; }
+  input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font-size:.9rem; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:7px 12px; font-size:.8rem; }
+  .gen { margin-top:16px; width:100%; }
+  .err { color:var(--bad); font-size:.85rem; margin-top:10px; min-height:1em; }
+  #out { display:none; }
+  .link { display:flex; gap:8px; margin-bottom:6px; }
+  .link input { font-family:monospace; font-size:.75rem; }
+  .tag { display:inline-block; font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:99px; color:#fff; margin-bottom:6px; }
+  .s { background:var(--ok); } .t { background:var(--bad); }
+  .note { font-size:.82rem; color:var(--muted); line-height:1.5; margin:0 0 8px; }
+  ol { margin:0; padding-left:20px; font-size:.9rem; line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Exam Monitor Setup</h1>
+  <p class="sub">Paste your Google Form link. Get your student link and teacher dashboard. That's it.</p>
+
+  <div class="card">
+    <label for="form">Google Form link</label>
+    <input id="form" placeholder="https://docs.google.com/forms/d/e/.../viewform">
+    <small>In your Form, click Publish, then the link icon. It must be the long docs.google.com link, not a short forms.gle one.</small>
+    <button class="gen" onclick="generate()">Generate my links</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="card" id="out">
+    <h2>Your links</h2>
+    <span class="tag s">FOR STUDENTS</span>
+    <div class="link"><input id="sLink" readonly><button class="ghost" onclick="copy('sLink', this)">Copy</button></div>
+    <p class="note">Share only this link. Never share the Form link directly.</p>
+
+    <span class="tag t">FOR YOU ONLY</span>
+    <div class="link"><input id="tLink" readonly><button class="ghost" onclick="copy('tLink', this)">Copy</button></div>
+    <p class="note">Open it to watch the exam live. It saves in your browser, so you can bookmark the dashboard page afterward.</p>
+
+    <button class="ghost" onclick="window.open(document.getElementById('tLink').value)">Open dashboard</button>
+    <button class="ghost" onclick="window.open(document.getElementById('sLink').value)">Test student page</button>
+    <p class="note" style="margin-top:12px">Each time you generate links you get a fresh, empty exam session. Use new links for each exam.</p>
+  </div>
+
+  <div class="card">
+    <h2>Steps</h2>
+    <ol>
+      <li>Make your Google Form and publish it.</li>
+      <li>Paste its link above and click Generate.</li>
+      <li>Open the teacher link, then share the student link.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+const base = location.href.replace(/[^/]*$/, "");
+const $ = id => document.getElementById(id);
+function host(u, h) { try { return new URL(u).hostname === h; } catch (e) { return false; } }
+
+function generate() {
+  const form = $("form").value.trim();
+  if (!host(form, "docs.google.com")) {
+    $("err").textContent = "The Form link should start with https://docs.google.com/forms/ (short forms.gle links won't work).";
+    return;
+  }
+  $("err").textContent = "";
+  // random private session id (the "topic")
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const topic = "em-" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  const f = new URL(form);
+  f.search = "?embedded=true";
+  $("sLink").value = base + "exam.html?form=" + encodeURIComponent(f.href) + "&t=" + topic;
+  $("tLink").value = base + "dashboard.html#t=" + topic;
+  $("out").style.display = "block";
+  $("out").scrollIntoView({ behavior: "smooth" });
+}
+
+function copy(id, btn) {
+  const el = $(id); el.select();
+  navigator.clipboard.writeText(el.value).then(() => {
+    const t = btn.textContent; btn.textContent = "Copied!";
+    setTimeout(() => btn.textContent = t, 1500);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam Monitor</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec; --accent:#2f6bff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171d; --card:#1d222b; --text:#e8ebf1; --muted:#8c94a6; --line:#2c3340; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text);
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .wrap { max-width:560px; width:100%; }
+  h1 { margin:0 0 8px; font-size:2rem; }
+  .lead { color:var(--muted); font-size:1.05rem; line-height:1.6; margin:0 0 24px; }
+  .btn { display:inline-block; padding:12px 22px; border-radius:10px; background:var(--accent);
+         color:#fff; font-weight:600; text-decoration:none; }
+  .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--line); margin-left:8px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:28px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card b { display:block; margin-bottom:4px; font-size:.95rem; }
+  .card span { color:var(--muted); font-size:.85rem; line-height:1.4; }
+  .foot { color:var(--muted); font-size:.8rem; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Exam Monitor</h1>
+  <p class="lead">A simple tool for Google Form exams. It detects when a student leaves the exam window and shows every event live on a teacher dashboard.</p>
+
+  <a class="btn" href="setup.html">Set up an exam</a>
+  <a class="btn ghost" href="https://github.com/" id="repo" style="display:none">View code</a>
+
+  <div class="grid">
+    <div class="card"><b>1. Set up</b><span>Paste your Form and script links. No code editing.</span></div>
+    <div class="card"><b>2. Share</b><span>Give students the generated exam link.</span></div>
+    <div class="card"><b>3. Monitor</b><span>Watch violations live and get alerts.</span></div>
+  </div>
+
+  <p class="foot">It detects and logs activity. It does not block other apps, and flags should be reviewed by a teacher, not treated as proof.</p>
+</div>
+</body>
+</html>
