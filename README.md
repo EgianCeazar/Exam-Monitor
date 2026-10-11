@@ -39,7 +39,7 @@ Student  ->  exam.html  --(events)-->  ntfy.sh  -->  dashboard.html  <-  Teacher
 
 ### 2. Open the setup page
 **Option A: Use the published website**
-Go to [[[https://peppy-klepon-14bb1b.netlify.app/setup.html](https://examonitor.netlify.app/)](https://examonitor.netlify.app/)](https://examonitor.netlify.app/)
+Go to https://examonitor.netlify.app/
 
 **Option B: Host it yourself**
 - **GitHub Pages:** push this repo, go to **Settings > Pages**, pick `main` and `/ (root)`, then **Save**. Your setup page is at `https://USERNAME.github.io/REPO-NAME/setup.html`
