@@ -44,9 +44,65 @@
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.96); }
                    to { opacity: 1; transform: none; } }
+
+  #gate { display: none; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center;
+          padding: 20px; background: #f5f6f8; color: #1d2330;
+          font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #gate .card { background: #fff; width: 100%; max-width: 420px; border-radius: 18px; padding: 32px 28px 26px;
+                text-align: center; box-shadow: 0 12px 40px rgba(0, 0, 0, .12); animation: pop .3s ease; }
+  #gate .icon { width: 56px; height: 56px; margin: 0 auto 18px; border-radius: 50%; background: #e8efff; color: #2f6bff;
+                display: flex; align-items: center; justify-content: center; }
+  #gate .icon svg { width: 28px; height: 28px; }
+  #gate h2 { margin: 0 0 8px; font-size: 1.3rem; font-weight: 650; }
+  #gate p { margin: 0 0 18px; color: #5b6475; font-size: .93rem; line-height: 1.5; }
+  #gate input { width: 100%; padding: 12px; border: 1px solid #d5d9e2; border-radius: 10px; font-size: 1rem;
+                background: #fff; color: inherit; margin-bottom: 8px; }
+  #gate input:focus { outline: 2px solid #2f6bff; border-color: transparent; }
+  #gate .gerr { color: #d83a3a; font-size: .85rem; min-height: 1.2em; margin-bottom: 8px; }
+  #gate .namebig { font-size: 1.25rem; font-weight: 700; padding: 12px; margin-bottom: 14px; border-radius: 10px;
+                   background: #f1f3f7; word-break: break-word; }
+  #gate button { width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #2f6bff; color: #fff;
+                 font-size: .95rem; font-weight: 600; cursor: pointer; }
+  #gate button.ghost { background: transparent; color: #5b6475; border: 1px solid #d5d9e2; }
+  #gate .row { display: flex; gap: 10px; }
+  @media (prefers-color-scheme: dark) {
+    #gate { background: #14171d; color: #e8ebf1; }
+    #gate .card { background: #1d222b; box-shadow: none; }
+    #gate .icon { background: rgba(47, 107, 255, .2); color: #7fa3ff; }
+    #gate p { color: #9aa3b5; }
+    #gate input { background: #14171d; border-color: #2c3340; }
+    #gate .namebig { background: #2a303b; }
+    #gate button.ghost { color: #9aa3b5; border-color: #2c3340; }
+  }
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="card">
+    <div id="step1">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <h2>Before you start</h2>
+      <p>Enter your full name. Leaving this window during the exam is recorded and shown to your teacher.</p>
+      <input id="nameBox" placeholder="Full name (e.g. Juan Dela Cruz)" maxlength="60" autocomplete="off">
+      <div class="gerr" id="gateErr"></div>
+      <button onclick="review()">Continue</button>
+    </div>
+    <div id="step2" style="display:none">
+      <h2>Is this correct?</h2>
+      <p>You entered:</p>
+      <div class="namebig" id="confirmName"></div>
+      <p>You can't change it once you start. Your teacher will see this name.</p>
+      <div class="row">
+        <button class="ghost" onclick="edit()">Edit</button>
+        <button onclick="confirmStart()">Yes, start exam</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="warn">
   <div class="card">
     <div class="icon">
@@ -78,9 +134,13 @@ if (!okHost(FORM, "docs.google.com") || !/^em-[a-f0-9]{24}$/.test(TOPIC || "")) 
     'This exam link is not set up correctly. Ask your teacher for the link made by setup.html.</p>';
   throw new Error("Missing or invalid form/topic");
 }
-document.getElementById("exam").src = FORM;
-const student = (prompt("Enter your full name:") || "").trim() || "Unknown student";
-let count = 0, away = false;
+const $ = id => document.getElementById(id);
+
+// The name is saved per exam session (the topic in the link). A new exam = new link = asks again.
+const SAVE_KEY = "em_exam_" + TOPIC;
+let student = "", count = 0, away = false;
+function loadSaved() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; } }
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: student, count })); } catch (e) {} }
 
 // send an event to the teacher; retry a few times if the network hiccups
 async function send(event, tries = 0) {
@@ -92,13 +152,36 @@ async function send(event, tries = 0) {
   }
 }
 
-// tell the dashboard the student joined
-send("joined");
+// ---- name screen ----
+function review() {
+  const n = $("nameBox").value.trim().replace(/\s+/g, " ");
+  if (n.length < 2) { $("gateErr").textContent = "Please enter your full name."; return; }
+  $("gateErr").textContent = "";
+  $("confirmName").textContent = n;
+  $("step1").style.display = "none";
+  $("step2").style.display = "block";
+}
+function edit() {
+  $("step2").style.display = "none";
+  $("step1").style.display = "block";
+  $("nameBox").focus();
+}
+function confirmStart() { startExam($("confirmName").textContent, 0, true); }
+$("nameBox").addEventListener("keydown", e => { if (e.key === "Enter") review(); });
+
+// ---- start the exam: show the Form, begin monitoring ----
+function startExam(name, savedCount, isNew) {
+  student = name; count = savedCount || 0; save();
+  $("gate").style.display = "none";
+  $("exam").src = FORM;
+  if (isNew) send("joined");        // tell the dashboard the student joined
+  watch();
+}
 
 function log(event) {
-  count++;
-  document.getElementById("warnCount").textContent = "Warning " + count;
-  document.getElementById("warn").style.display = "flex";
+  count++; save();
+  $("warnCount").textContent = "Warning " + count;
+  $("warn").style.display = "flex";
   send(event);
 }
 
@@ -112,21 +195,28 @@ function back() {
   if (!document.hidden && document.hasFocus()) away = false;
 }
 
-// switched tab
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) leave("switched tab");
-  else back();
-});
+function watch() {
+  // switched tab
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) leave("switched tab");
+    else back();
+  });
 
-// opened another app/window or clicked the other monitor
-setInterval(() => {
-  if (!document.hasFocus()) leave("left window");
-  else back();
-}, 500);
+  // opened another app/window or clicked the other monitor
+  setInterval(() => {
+    if (!document.hasFocus()) leave("left window");
+    else back();
+  }, 500);
 
-// block right click and copy/paste
-["contextmenu", "copy", "paste", "cut"].forEach(ev =>
-  document.addEventListener(ev, e => e.preventDefault()));
+  // block right click and copy/paste
+  ["contextmenu", "copy", "paste", "cut"].forEach(ev =>
+    document.addEventListener(ev, e => e.preventDefault()));
+}
+
+// refreshing the page keeps the same name and warning count
+const saved = loadSaved();
+if (saved && saved.name) startExam(saved.name, saved.count, false);
+else { $("gate").style.display = "flex"; $("nameBox").focus(); }
 </script>
 </body>
 </html>

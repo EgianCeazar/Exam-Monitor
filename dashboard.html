@@ -41,6 +41,8 @@
   button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
   .top { display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap; }
   #err { color:var(--bad); font-size:.85rem; }
+  .lim { font-size:.8rem; color:var(--muted); margin-right:8px; white-space:nowrap; }
+  .lim input { width:56px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font-size:.85rem; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warn); margin-right:6px; }
   .dot.live { background:var(--ok); }
   .empty { max-width:420px; margin:10vh auto; background:var(--card); border:1px solid var(--line); padding:22px; border-radius:12px; text-align:center; }
@@ -63,6 +65,7 @@
       <div class="sub"><span class="dot" id="dot"></span><span id="status">Connecting...</span></div>
     </div>
     <div>
+      <label class="lim">Flag at <input id="limit" type="number" min="1" max="99"> violations</label>
       <button class="ghost" onclick="enableAlerts()">Enable alerts</button>
       <button class="ghost" onclick="exportCsv()">Download CSV</button>
       <button class="ghost" onclick="location.href='setup.html'">New exam</button>
@@ -72,7 +75,7 @@
   <div class="stats">
     <div class="stat"><b id="sStudents">0</b><span>Students</span></div>
     <div class="stat"><b id="sViol">0</b><span>Total violations</span></div>
-    <div class="stat"><b id="sFlag" style="color:var(--bad)">0</b><span>Flagged (3+)</span></div>
+    <div class="stat"><b id="sFlag" style="color:var(--bad)">0</b><span id="flagLabel">Flagged (3+)</span></div>
     <div class="stat"><b id="sClean" style="color:var(--ok)">0</b><span>Clean</span></div>
   </div>
 
@@ -96,7 +99,7 @@
 <script>
 // Same server as in exam.html. Change both if you self-host ntfy.
 const NTFY = "https://ntfy.sh";
-const FLAG_AT = 3;
+let FLAG_AT = parseInt(localStorage.getItem("em_flag"), 10) || 3;   // change it on the dashboard
 
 // Teacher link from setup.html carries the session id in the # part
 let topic = localStorage.getItem("em_topic");
@@ -177,6 +180,7 @@ function render() {
   const list = Object.values(students).sort((a, b) => b.count - a.count || b.last - a.last);
   const violations = events.filter(r => r.event !== "joined");
 
+  document.getElementById("flagLabel").textContent = "Flagged (" + FLAG_AT + "+)";
   document.getElementById("sStudents").textContent = list.length;
   document.getElementById("sViol").textContent = violations.length;
   document.getElementById("sFlag").textContent = list.filter(s => s.count >= FLAG_AT).length;
@@ -208,6 +212,15 @@ function exportCsv() {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+const limitBox = document.getElementById("limit");
+limitBox.value = FLAG_AT;
+limitBox.addEventListener("change", () => {
+  const n = Math.min(99, Math.max(1, parseInt(limitBox.value, 10) || 3));
+  FLAG_AT = n; limitBox.value = n;
+  localStorage.setItem("em_flag", n);
+  render();
+});
 
 if (topic) {
   document.getElementById("app").style.display = "block";
